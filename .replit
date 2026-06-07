@@ -1,2 +1,0 @@
-run = "pnpm install && pnpm build && NODE_ENV=production node dist/index.js"
-language = "nodejs"
