@@ -1,5 +1,5 @@
 {
-  "name": "tanstack_start_ts",
+  "name": "wardizittodashboard",
   "private": true,
   "sideEffects": false,
   "type": "module",
@@ -85,7 +85,6 @@
     "typescript-eslint": "^8.56.1",
     "vite": "^7.3.1",
     "@types/bcryptjs": "^2.4.6",
-    "@tanstack/start-vite-plugin": "^1.167.28",
     "vite-tsconfig-paths": "^6.0.2"
   }
 }
