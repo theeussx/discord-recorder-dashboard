@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: wardizitto-recordings
+    env: node
+    buildCommand: pnpm install --no-frozen-lockfile && pnpm build
+    startCommand: pnpm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: ADMIN_PASS_HASH
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: BOT_API_BASE
+        sync: false
