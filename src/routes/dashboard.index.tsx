@@ -5,7 +5,7 @@ import { TopBar } from '@/components/top-bar';
 import { StatCard } from '@/components/stat-card';
 import { AudioPlayer } from '@/components/audio-player';
 import { formatBytes, formatDate, formatDuration } from '@/lib/format';
-import { getRecordingsFn, getClipsFn, getStatsFn } from '@/lib/bot-functions';
+import { getRecordingsFn, getClipsFn, getStatsFn } from '@/lib/bot-functions.server';
 import type { Recording, Clip } from '@/lib/mock-data';
 
 export const Route = createFileRoute('/dashboard/')({

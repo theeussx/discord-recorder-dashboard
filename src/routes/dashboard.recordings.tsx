@@ -4,7 +4,7 @@ import { Clock, Hash, Users, RefreshCw } from 'lucide-react';
 import { TopBar } from '@/components/top-bar';
 import { AudioPlayer } from '@/components/audio-player';
 import { formatBytes, formatDate, formatDuration } from '@/lib/format';
-import { getRecordingsFn } from '@/lib/bot-functions';
+import { getRecordingsFn } from '@/lib/bot-functions.server';
 import type { Recording } from '@/lib/mock-data';
 
 export const Route = createFileRoute('/dashboard/recordings')({

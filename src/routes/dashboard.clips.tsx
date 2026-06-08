@@ -4,7 +4,7 @@ import { Scissors, RefreshCw } from 'lucide-react';
 import { TopBar } from '@/components/top-bar';
 import { AudioPlayer } from '@/components/audio-player';
 import { formatBytes, formatDate, formatDuration } from '@/lib/format';
-import { getClipsFn } from '@/lib/bot-functions';
+import { getClipsFn } from '@/lib/bot-functions.server';
 import type { Clip } from '@/lib/mock-data';
 
 export const Route = createFileRoute('/dashboard/clips')({
