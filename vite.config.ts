@@ -3,10 +3,12 @@ import react from '@vitejs/plugin-react';
 import tsConfigPaths from 'vite-tsconfig-paths';
 import { tanstackStart } from '@tanstack/react-start/plugin/vite';
 import { nitro } from 'nitro/vite';
+import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
   plugins: [
     tsConfigPaths(),
+    tailwindcss(),
     tanstackStart({ server: { entry: 'src/server.ts' } }),
     nitro({ preset: 'node-server' }),
     react(),
