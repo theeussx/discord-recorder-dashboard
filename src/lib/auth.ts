@@ -1,10 +1,12 @@
 import { loginFn, logoutFn, meFn } from './auth-functions';
 
-const TOKEN_KEY = 'wr_token';
+// Lê o cookie de sinalização (não-httpOnly) — só indica se há sessão ativa
+// O JWT real fica no cookie httpOnly e nunca é acessível via JS
+const SESSION_KEY = 'wr_session';
 
 export function hasSessionSync(): boolean {
   if (typeof document === 'undefined') return false;
-  return document.cookie.includes(`${TOKEN_KEY}=`);
+  return document.cookie.split(';').some(c => c.trim().startsWith(`${SESSION_KEY}=`));
 }
 
 export async function signIn(password: string): Promise<void> {
