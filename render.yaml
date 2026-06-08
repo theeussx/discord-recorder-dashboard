@@ -3,7 +3,7 @@ services:
     name: wardizitto-recordings
     env: node
     buildCommand: pnpm install --no-frozen-lockfile && pnpm build
-    startCommand: pnpm start
+    startCommand: node dist/server/server.js
     envVars:
       - key: NODE_ENV
         value: production
