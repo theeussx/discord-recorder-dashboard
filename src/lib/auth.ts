@@ -1,4 +1,4 @@
-import { loginFn, logoutFn, meFn } from './auth.server';
+import { loginFn, logoutFn, meFn } from './auth-functions';
 
 const TOKEN_KEY = 'wr_token';
 
