@@ -8,6 +8,14 @@ export default defineConfig({
     tsConfigPaths(),
     tanstackStart({
       server: { entry: 'src/server.ts' },
+      // Força o preset node-server — o padrão cloudflare não faz listen()
+      nitro: {
+        preset: 'node-server',
+        output: {
+          dir: '.output',
+          serverDir: '.output/server',
+        },
+      },
     }),
     react(),
   ],
