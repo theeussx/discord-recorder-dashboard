@@ -1,6 +1,4 @@
 import "./lib/error-capture";
-import { createServer } from "node:http";
-import { createNodeRequestHandler } from "@tanstack/react-start/server";
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 
@@ -36,26 +34,18 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
   });
 }
 
-const handler = async (request: Request, env: unknown, ctx: unknown) => {
-  try {
-    const entry = await getServerEntry();
-    const response = await entry.fetch(request, env, ctx);
-    return await normalizeCatastrophicSsrResponse(response);
-  } catch (error) {
-    console.error(error);
-    return new Response(renderErrorPage(), {
-      status: 500,
-      headers: { "content-type": "text/html; charset=utf-8" },
-    });
-  }
+export default {
+  async fetch(request: Request, env: unknown, ctx: unknown) {
+    try {
+      const handler = await getServerEntry();
+      const response = await handler.fetch(request, env, ctx);
+      return await normalizeCatastrophicSsrResponse(response);
+    } catch (error) {
+      console.error(error);
+      return new Response(renderErrorPage(), {
+        status: 500,
+        headers: { "content-type": "text/html; charset=utf-8" },
+      });
+    }
+  },
 };
-
-// Adaptador para Node.js para rodar no Render
-const nodeHandler = createNodeRequestHandler(handler);
-const port = process.env.PORT || 3000;
-
-createServer(nodeHandler).listen(port, () => {
-  console.log(`Server is listening on port ${port}`);
-});
-
-export default { fetch: handler };
