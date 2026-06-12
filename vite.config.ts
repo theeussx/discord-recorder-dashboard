@@ -1,10 +1,12 @@
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
+import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import path from "node:path";
 import { defineConfig } from "vite";
 
 export default defineConfig({
   plugins: [
+    tanstackStart(),
     react(),
     tailwindcss(),
   ],
@@ -36,8 +38,6 @@ export default defineConfig({
   envDir: path.resolve(import.meta.dirname),
   // Build the app from the repository root using the real `src/` frontend source.
   root: path.resolve(import.meta.dirname),
-  // Public assets are kept in client/public.
-  publicDir: path.resolve(import.meta.dirname, "client", "public"),
   server: {
     host: true,
     allowedHosts: ["localhost", "127.0.0.1", "wardizitto-recorder.onrender.com"],
