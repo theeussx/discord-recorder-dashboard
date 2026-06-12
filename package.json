@@ -4,12 +4,11 @@
   "sideEffects": false,
   "type": "module",
   "scripts": {
-    "dev": "vite dev",
+    "dev": "vite --host",
     "build": "vite build",
-    "build:dev": "vite build --mode development",
-    "preview": "vite preview",
-    "start": "node .output/server/index.mjs",
-    "lint": "eslint .",
+    "start": "NODE_ENV=production node dist/index.js",
+    "preview": "vite preview --host",
+    "check": "tsc --noEmit",
     "format": "prettier --write ."
   },
   "dependencies": {
