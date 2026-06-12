@@ -34,9 +34,9 @@ export default defineConfig({
     },
   },
   envDir: path.resolve(import.meta.dirname),
-  // Build the client located in `client/`
-  root: path.resolve(import.meta.dirname, "client"),
-  // Public assets are kept in client/public
+  // Build the app from the repository root using the real `src/` frontend source.
+  root: path.resolve(import.meta.dirname),
+  // Public assets are kept in client/public.
   publicDir: path.resolve(import.meta.dirname, "client", "public"),
   server: {
     host: true,
