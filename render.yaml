@@ -9,9 +9,4 @@ services:
         value: production
       - key: PORT
         value: 3000
-      - key: ADMIN_PASS_HASH
-        sync: false
-      - key: JWT_SECRET
-        sync: false
-      - key: BOT_API_BASE
-        sync: false
+        
