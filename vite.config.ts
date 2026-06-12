@@ -1,20 +1,19 @@
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
-import tsConfigPaths from 'vite-tsconfig-paths';
-import { tanstackStart } from '@tanstack/react-start/plugin/vite';
-import { nitro } from 'nitro/vite';
-import tailwindcss from '@tailwindcss/vite';
+import tailwindcss from "@tailwindcss/vite";
+import react from "@vitejs/plugin-react";
+import path from "node:path";
+import { defineConfig } from "vite";
 
 export default defineConfig({
-  plugins: [
-    tsConfigPaths(),
-    tailwindcss(),
-    tanstackStart({ server: { entry: 'src/server.ts' } }),
-    nitro({ preset: 'node-server' }),
-    react(),
-  ],
-  server: {
-    port: 3000,
-    host: '0.0.0.0',
+  plugins: [react(), tailwindcss()],
+  resolve: {
+    alias: {
+      "@": path.resolve(import.meta.dirname, "client", "src"),
+      "@shared": path.resolve(import.meta.dirname, "shared"),
+    },
+  },
+  root: path.resolve(import.meta.dirname, "client"),
+  build: {
+    outDir: path.resolve(import.meta.dirname, "dist"),
+    emptyOutDir: true,
   },
 });
