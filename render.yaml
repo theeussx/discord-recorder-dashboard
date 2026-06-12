@@ -3,11 +3,13 @@ services:
     name: wardizitto-recordings
     env: node
     nodeVersion: 22.13.0
-    buildCommand: npx pnpm install --no-frozen-lockfile && npx pnpm build
-    startCommand: npx pnpm run start
+    buildCommand: npm install -g pnpm && pnpm install --no-frozen-lockfile && pnpm build
+    startCommand: pnpm run start
     envVars:
       - key: NODE_ENV
         value: production
+      - key: PORT
+        value: 3000
       - key: JWT_SECRET
         sync: false
       - key: ADMIN_PASS_HASH
