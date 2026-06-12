@@ -40,7 +40,7 @@ export default defineConfig({
   publicDir: path.resolve(import.meta.dirname, "client", "public"),
   server: {
     host: true,
-    allowedHosts: ["localhost", "127.0.0.1"],
+    allowedHosts: ["localhost", "127.0.0.1", "wardizitto-recorder.onrender.com"],
     fs: {
       strict: true,
       deny: ["**/.*"],
