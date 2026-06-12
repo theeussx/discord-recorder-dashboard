@@ -3,11 +3,11 @@
   "private": true,
   "sideEffects": false,
   "type": "module",
-  "scripts": {
-    "dev": "vite --host",
-    "build": "vite build",
-    "start": "NODE_ENV=production vite preview --host --port $PORT",
-    "preview": "vite preview --host",
+    "scripts": {
+    "dev": "vinxi dev",
+    "build": "vinxi build",
+    "start": "node .output/server/index.mjs",
+    "preview": "vinxi preview",
     "check": "tsc --noEmit",
     "format": "prettier --write ."
   },
