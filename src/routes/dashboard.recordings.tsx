@@ -105,7 +105,7 @@ function RecordingsPage() {
                   <div className="md:w-32">
                     <AudioPlayer
                       filename={rec.filename}
-                      src={`${import.meta.env.VITE_BOT_API_BASE ?? ''}/recordings/file/${encodeURIComponent(rec.filename)}`}
+                      src={`${import.meta.env.VITE_BOT_API_BASE ?? ''}/api/recordings/file/${encodeURIComponent(rec.filename)}`}
                       compact
                     />
                   </div>

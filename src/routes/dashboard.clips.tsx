@@ -73,7 +73,7 @@ function ClipsPage() {
                 <div className="mt-4">
                   <AudioPlayer
                     filename={clip.filename}
-                    src={`${import.meta.env.VITE_BOT_API_BASE ?? ''}/clips/file/${encodeURIComponent(clip.filename)}`}
+                    src={`${import.meta.env.VITE_BOT_API_BASE ?? ''}/api/clips/file/${encodeURIComponent(clip.filename)}`}
                   />
                 </div>
               </article>

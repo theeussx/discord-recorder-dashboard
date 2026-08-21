@@ -125,7 +125,7 @@ function OverviewPage() {
                     )}
                   </div>
                   <div className="w-28">
-                    <AudioPlayer filename={rec.filename} src={`${BOT_BASE}/recordings/file/${encodeURIComponent(rec.filename)}`} compact />
+                    <AudioPlayer filename={rec.filename} src={`${BOT_BASE}/api/recordings/file/${encodeURIComponent(rec.filename)}`} compact />
                   </div>
                 </li>
               ))}
@@ -158,7 +158,7 @@ function OverviewPage() {
                   <span className="rounded-full border border-border bg-accent px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">clip</span>
                 </div>
                 <div className="mt-4">
-                  <AudioPlayer filename={clip.filename} src={`${BOT_BASE}/clips/file/${encodeURIComponent(clip.filename)}`} />
+                  <AudioPlayer filename={clip.filename} src={`${BOT_BASE}/api/clips/file/${encodeURIComponent(clip.filename)}`} />
                 </div>
               </div>
             ))}

@@ -1,4 +1,4 @@
-import * as bcrypt from 'bcryptjs';
+import bcrypt from 'bcryptjs';
 import * as jose from 'jose';
 
 const TOKEN_TTL = 60 * 60 * 24 * 7; // 7 dias em segundos

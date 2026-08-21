@@ -1,6 +1,6 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useEffect } from "react";
-import { hasSessionSync } from "@/lib/auth";
+import { checkSession } from "@/lib/auth";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -11,17 +11,17 @@ export const Route = createFileRoute("/")({
       { property: "og:description", content: "Painel das gravações do Discord." },
     ],
   }),
-  beforeLoad: () => {
-    if (typeof window !== "undefined") {
-      throw redirect({ to: hasSessionSync() ? "/dashboard" : "/login" });
-    }
+  beforeLoad: async () => {
+    throw redirect({ to: (await checkSession()) ? "/dashboard" : "/login" });
   },
   component: Index,
 });
 
 function Index() {
   useEffect(() => {
-    window.location.href = hasSessionSync() ? "/dashboard" : "/login";
+    void checkSession().then(ok => {
+      window.location.href = ok ? "/dashboard" : "/login";
+    });
   }, []);
   return (
     <div className="grid min-h-screen place-items-center bg-background">

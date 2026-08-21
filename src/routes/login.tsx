@@ -2,7 +2,7 @@ import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { ArrowRight, Lock, Mic, ShieldCheck, Scissors } from 'lucide-react';
 import { toast } from 'sonner';
-import { hasSessionSync, signIn } from '@/lib/auth';
+import { checkSession, signIn } from '@/lib/auth';
 import { BrandLockup } from '@/components/brand';
 
 export const Route = createFileRoute('/login')({
@@ -12,8 +12,8 @@ export const Route = createFileRoute('/login')({
       { name: 'description', content: 'Acesse o painel das gravações do Discord.' },
     ],
   }),
-  beforeLoad: () => {
-    if (hasSessionSync()) throw redirect({ to: '/dashboard' });
+  beforeLoad: async () => {
+    if (await checkSession()) throw redirect({ to: '/dashboard' });
   },
   component: LoginPage,
 });

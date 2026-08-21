@@ -1,11 +1,11 @@
 import { createFileRoute, Outlet, redirect, useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { Sidebar } from '@/components/sidebar';
-import { hasSessionSync, checkSession } from '@/lib/auth';
+import { checkSession } from '@/lib/auth';
 
 export const Route = createFileRoute('/dashboard')({
-  beforeLoad: () => {
-    if (typeof window !== 'undefined' && !hasSessionSync()) {
+  beforeLoad: async () => {
+    if (!(await checkSession())) {
       throw redirect({ to: '/login' });
     }
   },

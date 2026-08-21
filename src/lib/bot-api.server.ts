@@ -59,25 +59,25 @@ function normalizeClip(c: any, idx: number): Clip {
 }
 
 export async function fetchRecordings(): Promise<Recording[]> {
-  const data = await botFetch<any[]>('/recordings');
+  const data = await botFetch<any[]>('/api/recordings');
   if (!data) return [];
   return data.map(normalizeRecording);
 }
 
 export async function fetchClips(): Promise<Clip[]> {
-  const data = await botFetch<any[]>('/clips');
+  const data = await botFetch<any[]>('/api/clips');
   if (!data) return [];
   return data.map(normalizeClip);
 }
 
 export async function fetchStats(): Promise<BotStats> {
-  const data = await botFetch<BotStats>('/stats');
+  const data = await botFetch<BotStats>('/api/stats');
   return data ?? { totalRecordings: 0, totalUsers: 0, storageUsed: '—' };
 }
 
 export function getFileUrl(type: 'recordings' | 'clips', filename: string): string {
   const base = getBotBase();
   if (!base) return '';
-  return `${base}/${type}/file/${encodeURIComponent(filename)}`;
+  return `${base}/api/${type}/file/${encodeURIComponent(filename)}`;
                    }
 
