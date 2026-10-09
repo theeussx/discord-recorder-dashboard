@@ -11,7 +11,7 @@
     "build:bot": "tsc -p tsconfig.json --noEmit",
     "build:dash": "vite build --config dashboard/vite.config.ts --root dashboard",
     "start": "node --loader ts-node/esm src/index.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --experimental-strip-types --test src/**/*.test.ts"
   },
   "keywords": [],
   "author": "",

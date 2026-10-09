@@ -1,9 +1,10 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, AttachmentBuilder } from 'discord.js';
 import { DiscordBot } from '../../bot/client.ts';
 import ffmpeg from 'fluent-ffmpeg';
-import path from 'path';
+import path from 'node:path';
 import { existsSync, mkdirSync, readdirSync } from 'fs';
 import { stat } from 'fs/promises';
+import { getClipsPath } from '../../utils/config.ts';
 
 const MAX_DISCORD_BYTES = 24 * 1024 * 1024; // 24MB — margem segura abaixo do limite de 25MB
 
@@ -85,14 +86,21 @@ export const command = {
       const startSec = Math.max(0, sessionDurationSecs - clipDurationSecs);
       const actualDurationSecs = sessionDurationSecs - startSec;
 
-      const clipsFolder = path.resolve('./clips');
+      const clipsFolder = getClipsPath();
       if (!existsSync(clipsFolder)) mkdirSync(clipsFolder, { recursive: true });
 
       const ts = new Date().toISOString().replace(/[:.]/g, '-');
       const fileName = nomeSugerido
         ? `${nomeSugerido.replace(/[^a-z0-9]/gi, '_')}.mp3`
         : `clip-${minutos}min-${ts}.mp3`;
-      const outputPath = path.join(clipsFolder, fileName);
+      let outputPath = path.join(clipsFolder, fileName);
+      let collision = 1;
+      while (existsSync(outputPath)) {
+        const ext = path.extname(fileName);
+        const base = path.basename(fileName, ext);
+        outputPath = path.join(clipsFolder, `${base}-${collision++}${ext}`);
+      }
+      const finalFileName = path.basename(outputPath);
 
       // Fix 6: complexFilter correto com labels explícitos para chain amix→trim
       await new Promise<void>((resolve, reject) => {
@@ -133,9 +141,9 @@ export const command = {
       const fileSize = (await stat(outputPath)).size;
 
       if (fileSize <= MAX_DISCORD_BYTES) {
-        const attachment = new AttachmentBuilder(outputPath, { name: fileName });
+        const attachment = new AttachmentBuilder(outputPath, { name: finalFileName });
         await interaction.editReply({
-          content: `🎬 Clip de **${durStr}** gerado! Salvo em \`clips/${fileName}\`.`,
+          content: `🎬 Clip de **${durStr}** gerado! Salvo em \`clips/${finalFileName}\`.`,
           files: [attachment],
         });
       } else {
@@ -143,7 +151,7 @@ export const command = {
         const sizeMb = (fileSize / 1024 / 1024).toFixed(1);
         await interaction.editReply(
           `🎬 Clip de **${durStr}** gerado com sucesso!\n` +
-          `📁 Salvo em \`clips/${fileName}\`\n` +
+          `📁 Salvo em \`clips/${finalFileName}\`\n` +
           `⚠️ Arquivo com **${sizeMb}MB** — grande demais para enviar pelo Discord. Use o dashboard ou \`/salvardrive\` para acessá-lo.`
         );
       }

@@ -16,18 +16,22 @@ export const Route = createFileRoute('/dashboard/')({
 function OverviewPage() {
   const [recordings, setRecordings] = useState<Recording[]>([]);
   const [clips, setClips]           = useState<Clip[]>([]);
-  const [stats, setStats]           = useState({ totalRecordings: 0, totalUsers: 0, storageUsed: '—', totalClips: 0 });
+  const [stats, setStats]           = useState({ totalRecordings: 0, totalUsers: 0, storageUsed: '—', storageUsedBytes: 0, storageQuotaBytes: 0, totalClips: 0 });
   const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState(new Date());
 
   async function load() {
     setLoading(true);
+    setError(null);
     try {
       const [recs, cls, st] = await Promise.all([getRecordingsFn(), getClipsFn(), getStatsFn()]);
       setRecordings(recs);
       setClips(cls);
       setStats({ ...st, totalClips: cls.length });
       setLastRefresh(new Date());
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Não foi possível carregar os dados.');
     } finally {
       setLoading(false);
     }
@@ -39,17 +43,9 @@ function OverviewPage() {
   const recent      = recordings.slice(0, 5);
   const recentClips = clips.slice(0, 4);
 
-  // Calcula % de storage — extrai número de strings como "171.85 MB"
-  const storageBytes = (() => {
-    const m = stats.storageUsed.match(/([\d.]+)\s*(B|KB|MB|GB)/i);
-    if (!m) return 0;
-    const n = parseFloat(m[1]);
-    const u = m[2].toUpperCase();
-    const map: Record<string, number> = { B: 1, KB: 1024, MB: 1024**2, GB: 1024**3 };
-    return n * (map[u] ?? 1);
-  })();
-  const quotaBytes = 3 * 1024 ** 3; // 3GB
-  const usedPct = Math.min(100, (storageBytes / quotaBytes) * 100);
+  const quotaBytes = stats.storageQuotaBytes || 1;
+  const usedPct = Math.min(100, (stats.storageUsedBytes / quotaBytes) * 100);
+  const quotaLabel = formatBytes(quotaBytes);
 
   return (
     <>
@@ -63,11 +59,12 @@ function OverviewPage() {
       />
 
       <div className="space-y-8 px-5 py-6 md:px-8 md:py-8">
+        {error && <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">{error}</div>}
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard label="Gravações"    value={String(stats.totalRecordings)} hint="Total salvas"         icon={Mic}       accent="brand"   />
           <StatCard label="Clipes"       value={String(stats.totalClips)}      hint="Destaques salvos"     icon={Scissors}  accent="success" />
           <StatCard label="Participantes" value={String(stats.totalUsers)}      hint="Únicos identificados" icon={Users}     accent="warning" />
-          <StatCard label="Armazenamento" value={stats.storageUsed}             hint="de 3 GB"              icon={HardDrive} accent="brand"   />
+          <StatCard label="Armazenamento" value={stats.storageUsed}             hint={`de ${quotaLabel}`}       icon={HardDrive} accent="brand"   />
         </section>
 
         {/* Barra de storage */}
@@ -77,7 +74,7 @@ function OverviewPage() {
               <HardDrive size={16} className="text-brand" />
               <span className="text-sm font-medium text-foreground">Armazenamento</span>
             </div>
-            <span className="text-xs text-muted-foreground">{stats.storageUsed} de 3 GB</span>
+            <span className="text-xs text-muted-foreground">{stats.storageUsed} de {quotaLabel}</span>
           </div>
           <div className="h-2 w-full overflow-hidden rounded-full bg-border">
             <div

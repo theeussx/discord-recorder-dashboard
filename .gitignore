@@ -16,7 +16,21 @@ dist-ssr
 .tanstack/**
 .nitro
 .env
+!.env.example
 *.local
+
+# Bot e dados locais — nunca versionar
+bot/.env
+recordings/
+clips/
+bot/recordings/
+bot/clips/
+*.pcm
+*.mp3
+*.wav
+*.ogg
+drive-credentials.json
+bot/drive-credentials.json
 
 # Wrangler / Cloudflare
 .wrangler/

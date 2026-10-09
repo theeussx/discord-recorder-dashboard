@@ -1,133 +1,124 @@
 import cron from 'node-cron';
-import fs from 'fs';
-import path from 'path';
-import { VoiceRecorder } from '../voice/recorder.ts';
+import fs from 'node:fs';
+import path from 'node:path';
 import { DiscordBot } from '../bot/client.ts';
-import { joinVoiceChannel, VoiceConnectionStatus, entersState } from '@discordjs/voice';
-import { getIO } from '../events.ts';
+import { getStorageConfig, getStoragePath } from './config.ts';
 
-const MAX_SIZE_BYTES = 3 * 1024 * 1024 * 1024; // 3GB
-
-// Apaga tudo dentro de um diretório mas mantém a pasta raiz
-function nukeDirectory(dirPath: string) {
-  if (!fs.existsSync(dirPath)) return;
-  for (const entry of fs.readdirSync(dirPath, { withFileTypes: true })) {
-    const full = path.join(dirPath, entry.name);
-    if (entry.isDirectory()) {
-      fs.rmSync(full, { recursive: true, force: true });
-    } else {
-      try { fs.unlinkSync(full); } catch {}
-    }
-  }
+export interface CleanupFile {
+  path: string;
+  size: number;
+  mtimeMs: number;
 }
 
-function getFolderSize(dirPath: string): number {
-  if (!fs.existsSync(dirPath)) return 0;
+function isInside(root: string, candidate: string): boolean {
+  const relative = path.relative(root, candidate);
+  return relative === '' || (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
+}
+
+export function getFolderSize(dirPath: string): number {
   let total = 0;
-  for (const entry of fs.readdirSync(dirPath, { withFileTypes: true })) {
+  let entries: fs.Dirent[];
+  try { entries = fs.readdirSync(dirPath, { withFileTypes: true }); } catch { return 0; }
+  for (const entry of entries) {
     const full = path.join(dirPath, entry.name);
     try {
-      total += entry.isDirectory()
-        ? getFolderSize(full)
-        : fs.statSync(full).size;
-    } catch {}
+      total += entry.isDirectory() ? getFolderSize(full) : fs.statSync(full).size;
+    } catch (error) {
+      console.warn(`[Cleanup] Não foi possível ler ${entry.name}; nenhum arquivo será removido por essa leitura.`, error instanceof Error ? error.message : 'erro desconhecido');
+    }
   }
   return total;
 }
 
-async function restartRecording(client: DiscordBot, guildId: string) {
-  const rec = client.activeRecordings.get(guildId);
-  if (!rec) return;
-
-  const { connection, channelId } = rec;
-  const guild = client.guilds.cache.get(guildId);
-  if (!guild) return;
-
-  const voiceChannel = guild.channels.cache.get(channelId);
-  if (!voiceChannel?.isVoiceBased()) return;
-
-  // Para a sessão atual sem gerar mix (dados vão ser apagados mesmo)
-  try {
-    await client.recorder.stopSession(guildId);
-  } catch {}
-  connection.destroy();
-  client.activeRecordings.delete(guildId);
-
-  // Apaga recordings
-  const storagePath = path.resolve(process.env.STORAGE_PATH || './recordings');
-  nukeDirectory(storagePath);
-  console.log('🗑️ [Cleanup] recordings/ limpo completamente.');
-
-  // Aguarda um segundo para garantir que os file handles fecharam
-  await new Promise(r => setTimeout(r, 1000));
-
-  // Reinicia a gravação no mesmo canal
-  try {
-    const newConnection = joinVoiceChannel({
-      channelId: voiceChannel.id,
-      guildId,
-      adapterCreator: guild.voiceAdapterCreator,
-      selfDeaf: false,
-      selfMute: false,
-    });
-
-    await entersState(newConnection, VoiceConnectionStatus.Ready, 15_000);
-
-    const session = await client.recorder.startSession(newConnection, guildId, client);
-
-    client.activeRecordings.set(guildId, {
-      session,
-      connection: newConnection,
-      channelId: voiceChannel.id,
-    });
-
-    getIO()?.emit('recording:start', { guildId });
-
-    // Avisa no canal de texto mais recente do servidor
-    const textChannel = guild.channels.cache
-      .filter(c => c.isTextBased() && c.permissionsFor(guild.members.me!)?.has('SendMessages'))
-      .first();
-
-    if (textChannel?.isTextBased()) {
-      await textChannel.send(
-        `♻️ **Reset automático de armazenamento**\n` +
-        `O limite de **3GB** foi atingido. As gravações foram apagadas e a call foi reiniciada automaticamente.\n` +
-        `✂️ Clips não foram afetados.`
-      ).catch(() => {});
+export function listCleanupFiles(root: string, protectedPaths = new Set<string>()): CleanupFile[] {
+  const files: CleanupFile[] = [];
+  const rootResolved = path.resolve(root);
+  const walk = (dir: string) => {
+    let entries: fs.Dirent[];
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries) {
+      const full = path.resolve(dir, entry.name);
+      if (!isInside(rootResolved, full)) continue;
+      if (entry.isDirectory()) walk(full);
+      else {
+        try {
+          const stat = fs.statSync(full);
+          if (![...protectedPaths].some(active => isInside(path.resolve(active), full))) {
+            files.push({ path: full, size: stat.size, mtimeMs: stat.mtimeMs });
+          }
+        } catch { /* arquivo pode ter sido removido durante a varredura */ }
+      }
     }
+  };
+  walk(rootResolved);
+  return files.sort((a, b) => a.mtimeMs - b.mtimeMs);
+}
 
-    console.log(`♻️ [Cleanup] Gravação reiniciada em "${voiceChannel.name}" (${guildId})`);
-  } catch (err) {
-    console.error('[Cleanup] Falha ao reiniciar gravação:', err);
+export function selectFilesForLimit(files: CleanupFile[], currentBytes: number, limitBytes: number): CleanupFile[] {
+  if (!Number.isFinite(limitBytes) || limitBytes <= 0 || currentBytes <= limitBytes) return [];
+  const selected: CleanupFile[] = [];
+  let remaining = currentBytes;
+  for (const file of files) {
+    if (remaining <= limitBytes) break;
+    selected.push(file);
+    remaining -= file.size;
   }
+  return selected;
+}
+
+function activeProtectedPaths(client: DiscordBot): Set<string> {
+  const paths = new Set<string>();
+  for (const session of client.recorder.sessions.values()) {
+    paths.add(session.folderPath);
+  }
+  return paths;
+}
+
+async function runCleanup(client: DiscordBot): Promise<void> {
+  const storagePath = getStoragePath();
+  const { valid, maxStorageBytes, maxStorageGb, autoDeleteDays } = getStorageConfig();
+  if (!valid) {
+    console.error('[Cleanup] MAX_STORAGE_GB ou AUTO_DELETE_DAYS inválido; limpeza desativada por segurança.');
+    return;
+  }
+  const currentBytes = getFolderSize(storagePath);
+  if (currentBytes === 0) return;
+
+  const protectedPaths = activeProtectedPaths(client);
+  const files = listCleanupFiles(storagePath, protectedPaths);
+  const now = Date.now();
+  const retentionCutoff = now - autoDeleteDays * 24 * 60 * 60 * 1000;
+  const oldFiles = files.filter(file => file.mtimeMs < retentionCutoff);
+  const overLimit = selectFilesForLimit(files, currentBytes, maxStorageBytes);
+  const candidates = [...new Map([...oldFiles, ...overLimit].map(file => [file.path, file])).values()]
+    .sort((a, b) => a.mtimeMs - b.mtimeMs);
+  const toDelete = new Set(candidates.map(file => file.path));
+  if (currentBytes > maxStorageBytes) {
+    for (const file of selectFilesForLimit(files, currentBytes, maxStorageBytes)) toDelete.add(file.path);
+  }
+
+  if (toDelete.size === 0) return;
+  let deletedBytes = 0;
+  for (const file of files) {
+    if (!toDelete.has(file.path)) continue;
+    try {
+      fs.unlinkSync(file.path);
+      deletedBytes += file.size;
+      console.log(`[Cleanup] Arquivo removido: ${path.relative(storagePath, file.path)}`);
+    } catch (error) {
+      console.error(`[Cleanup] Falha ao remover arquivo: ${path.relative(storagePath, file.path)}`, error instanceof Error ? error.message : error);
+    }
+  }
+  console.log(`[Cleanup] Removidos ${(deletedBytes / 1024 ** 2).toFixed(1)} MB; limite configurado: ${maxStorageGb} GB; retenção: ${autoDeleteDays} dias.`);
 }
 
 export function startCleanupJob(client: DiscordBot) {
-  const storagePath = path.resolve(process.env.STORAGE_PATH || './recordings');
-
+  let running = false;
   cron.schedule('*/5 * * * *', async () => {
-    const totalSize = getFolderSize(storagePath);
-
-    if (totalSize <= MAX_SIZE_BYTES) return;
-
-    const mb = (totalSize / 1024 / 1024).toFixed(0);
-    console.log('\n==================================================');
-    console.log(`🚨 [ALERTA] Limite de 3GB atingido! (${mb}MB em uso)`);
-    console.log('♻️ [Cleanup] Parando calls, limpando e reiniciando...');
-    console.log('==================================================\n');
-
-    // Processa cada guild que tem gravação ativa
-    const activeGuilds = [...client.activeRecordings.keys()];
-
-    if (activeGuilds.length > 0) {
-      // Para e reinicia cada sessão ativa
-      for (const guildId of activeGuilds) {
-        await restartRecording(client, guildId);
-      }
-    } else {
-      // Sem sessão ativa — apaga direto
-      nukeDirectory(storagePath);
-      console.log('🗑️ [Cleanup] recordings/ limpo (sem sessão ativa).');
-    }
+    if (running) return;
+    running = true;
+    try { await runCleanup(client); }
+    catch (error) { console.error('[Cleanup] Falha inesperada; nenhum reset destrutivo será executado.', error); }
+    finally { running = false; }
   });
 }

@@ -13,6 +13,26 @@ const pool = mysql.createPool({
   queueLimit: 0,
 });
 
+let databaseReady = false;
+let databaseError: string | null = null;
+
+export async function checkDatabase(): Promise<boolean> {
+  try {
+    await pool.query('SELECT 1');
+    databaseReady = true;
+    databaseError = null;
+    return true;
+  } catch (error) {
+    databaseReady = false;
+    databaseError = error instanceof Error ? error.message : 'database unavailable';
+    return false;
+  }
+}
+
+export function getDatabaseStatus() {
+  return { ready: databaseReady, error: databaseReady ? null : databaseError };
+}
+
 export const initDB = async () => {
   const connection = await pool.getConnection();
   try {
@@ -23,7 +43,6 @@ export const initDB = async () => {
         total_recordings INT DEFAULT 0
       )
     `);
-
     await connection.query(`
       CREATE TABLE IF NOT EXISTS recordings (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -33,13 +52,18 @@ export const initDB = async () => {
         size BIGINT NOT NULL,
         participants TEXT NOT NULL,
         guild_id VARCHAR(255) NOT NULL,
-        channel_id VARCHAR(255) NOT NULL
+        channel_id VARCHAR(255) NOT NULL,
+        INDEX recordings_date_idx (date)
       )
     `);
-
+    databaseReady = true;
+    databaseError = null;
     console.log('Database initialized successfully');
   } catch (error) {
-    console.error('Error initializing database:', error);
+    databaseReady = false;
+    databaseError = error instanceof Error ? error.message : 'database initialization failed';
+    console.error('Error initializing database:', databaseError);
+    throw error;
   } finally {
     connection.release();
   }

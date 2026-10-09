@@ -44,6 +44,7 @@ As variáveis principais são:
 | `JWT_SECRET` | Sim | Segredo longo e aleatório usado para assinar sessões. |
 | `ADMIN_PASS_HASH` | Sim | Hash bcrypt da senha administrativa. |
 | `BOT_API_BASE` | Sim | URL base da API do bot, sem a barra final. |
+| `BOT_API_TOKEN` | Opcional | Token compartilhado enviado pelo dashboard server-side para proteger a API do bot. Nunca exponha esse valor em `VITE_*`. |
 | `VITE_BOT_API_BASE` | Conforme o deploy | URL pública do bot usada pelos players de áudio no navegador. |
 
 Para gerar um hash bcrypt, use um gerador confiável ou um pequeno script local que utilize a mesma versão de `bcryptjs` do projeto. Nunca coloque a senha em arquivos versionados.
@@ -59,6 +60,7 @@ GUILD_ID=
 PORT=2312
 JWT_SECRET=
 DASHBOARD_URL=http://localhost:3000
+BOT_API_TOKEN=
 DB_HOST=127.0.0.1
 DB_USER=
 DB_PASS=
@@ -101,6 +103,8 @@ pnpm dev:bot
 
 O dashboard deve apontar `BOT_API_BASE` e `VITE_BOT_API_BASE` para a URL onde o bot/API está ouvindo. Em desenvolvimento local, normalmente essa URL é `http://localhost:2312`.
 
+Quando `BOT_API_TOKEN` estiver configurado no bot, ele também deve existir somente no ambiente server-side do dashboard. O CORS do bot permanece fechado quando `DASHBOARD_URL` não está definida; em produção, configure explicitamente a origem HTTPS autorizada.
+
 ## Scripts
 
 ### Dashboard
@@ -142,7 +146,7 @@ Exemplo de health check:
 curl http://localhost:2312/health
 ```
 
-A resposta esperada possui `ok: true`, o nome do serviço e um timestamp ISO-8601.
+A resposta esperada possui `ok: true`, `database: "ok"`, o nome do serviço e um timestamp ISO-8601. Se o banco estiver indisponível, `/health` retorna HTTP 503 e `ok: false`; isso evita que um monitor declare o serviço saudável quando a API não consegue consultar o banco.
 
 ## Autenticação e correção do login
 
@@ -154,7 +158,9 @@ Se o login falhar, verifique primeiro se `JWT_SECRET` e `ADMIN_PASS_HASH` estão
 
 ## Armazenamento e banco de dados
 
-As gravações são consultadas na tabela `recordings` do MySQL. O diretório definido por `STORAGE_PATH` é usado para os arquivos de áudio, enquanto os clipes ficam no diretório irmão `clips`, conforme a implementação atual do bot.
+As gravações são consultadas na tabela `recordings` do MySQL. O diretório definido por `STORAGE_PATH` é usado para os arquivos de áudio, enquanto os clipes ficam no diretório irmão `clips`.
+
+A limpeza automática roda a cada cinco minutos e nunca apaga o diretório inteiro. `MAX_STORAGE_GB` define o limite em GiB; quando ele é excedido, arquivos não ativos são removidos do mais antigo para o mais novo somente até voltar ao limite. `AUTO_DELETE_DAYS` remove gravações antigas conforme a retenção configurada. Configurações inválidas falham de forma segura e não iniciam exclusões destrutivas. Clipes e sessões ativas são preservados.
 
 Garanta que o processo tenha permissão de leitura e escrita no armazenamento e configure a política de limpeza automática de acordo com o espaço disponível. Antes de ativar a limpeza em produção, faça backup dos arquivos importantes e confirme o valor de `AUTO_DELETE_DAYS`.
 
@@ -162,7 +168,7 @@ Garanta que o processo tenha permissão de leitura e escrita no armazenamento e 
 
 O dashboard e o bot podem ser publicados como serviços separados. O dashboard deve receber as variáveis de autenticação e a URL da API. O bot deve receber as credenciais do Discord, banco, armazenamento e a URL permitida do dashboard.
 
-Em produção, prefira HTTPS, defina explicitamente `DASHBOARD_URL`, use secrets do provedor de hospedagem e mantenha o banco e o armazenamento fora do controle de versão. Não use `origin: *` para um ambiente público com credenciais.
+Em produção, prefira HTTPS, defina explicitamente `DASHBOARD_URL`, use secrets do provedor de hospedagem e mantenha o banco e o armazenamento fora do controle de versão. Não use `origin: *` para um ambiente público com credenciais. O comando `/salvardrive` aceita somente arquivos de áudio dentro de `STORAGE_PATH` ou do diretório `clips` e exige a permissão Manage Server.
 
 O endpoint `/health` pode ser utilizado por Render, Docker, Kubernetes ou outro monitor para verificar se o processo HTTP do bot está respondendo.
 
@@ -180,6 +186,8 @@ Antes de abrir um pull request, execute os checks TypeScript do dashboard e do b
 git diff --check
 git status --short
 ```
+
+Os testes de regressão do bot podem ser executados com `npm test` dentro de `bot/`. Eles cobrem a seleção de arquivos antigos para limpeza e a contenção de caminhos contra path traversal.
 
 Commits devem ser pequenos, descritivos e não devem conter segredos. Alterações na API devem atualizar a tabela de endpoints deste documento.
 

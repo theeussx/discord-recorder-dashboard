@@ -10,7 +10,7 @@ export interface BotStats {
 
 function getBotBase(): string | null {
   const base = process.env.BOT_API_BASE;
-  return base ? base.replace(/\/+$/, '') : null;
+  return base ? base.replace(/\/+$/, '').replace(/\/api$/i, '') : null;
 }
 
 async function botFetch<T>(path: string): Promise<T | null> {
@@ -80,4 +80,3 @@ export function getFileUrl(type: 'recordings' | 'clips', filename: string): stri
   if (!base) return '';
   return `${base}/api/${type}/file/${encodeURIComponent(filename)}`;
                    }
-

@@ -1,24 +1,34 @@
-import express from 'express';
+import express, { type Request, type Response, type NextFunction } from 'express';
 import cors from 'cors';
-import { createServer } from 'http';
+import { createServer } from 'node:http';
 import { Server } from 'socket.io';
-import { readdirSync, statSync, existsSync } from 'fs';
-import pool from '../database/db.ts';
+import { readdirSync, statSync, existsSync } from 'node:fs';
+import pool, { checkDatabase, getDatabaseStatus } from '../database/db.ts';
 import { setIO } from '../events.ts';
-import path from 'path';
+import path from 'node:path';
+import { getBotApiToken, getClipsPath, getDashboardUrl, getStorageConfig, getStoragePath } from '../utils/config.ts';
+import { resolveStoredFile } from '../utils/paths.ts';
 
 const app = express();
 const httpServer = createServer(app);
-
-const DASHBOARD_URL = process.env.DASHBOARD_URL?.trim();
-const corsOrigin = DASHBOARD_URL || true;
-const corsOptions = { origin: corsOrigin, credentials: true };
+const dashboardUrl = getDashboardUrl();
+const corsOptions = {
+  origin: dashboardUrl ? [dashboardUrl] : [],
+  credentials: true,
+};
 const io = new Server(httpServer, { cors: corsOptions });
 
 setIO(io);
-
 app.use(cors(corsOptions));
-app.use(express.json());
+app.use(express.json({ limit: '100kb' }));
+
+function requireApiAuth(req: Request, res: Response, next: NextFunction) {
+  const expected = getBotApiToken();
+  if (!expected) return next();
+  const received = req.header('authorization')?.replace(/^Bearer\s+/i, '') ?? req.header('x-api-token');
+  if (!received || received !== expected) return res.status(401).json({ error: 'Não autorizado' });
+  next();
+}
 
 function getFolderSizeBytes(folderPath: string): number {
   let total = 0;
@@ -27,7 +37,9 @@ function getFolderSizeBytes(folderPath: string): number {
       const fullPath = path.join(folderPath, entry.name);
       total += entry.isDirectory() ? getFolderSizeBytes(fullPath) : statSync(fullPath).size;
     }
-  } catch {}
+  } catch (error) {
+    console.warn('[API] Falha ao calcular armazenamento:', error instanceof Error ? error.message : 'erro desconhecido');
+  }
   return total;
 }
 
@@ -39,125 +51,110 @@ function formatBytes(bytes: number): string {
 }
 
 function findFile(rootPath: string, filename: string): string | null {
+  if (!filename || filename !== path.basename(filename)) return null;
   if (!existsSync(rootPath)) return null;
   try {
     for (const entry of readdirSync(rootPath, { withFileTypes: true })) {
-      const fullPath = path.join(rootPath, entry.name);
+      const full = path.join(rootPath, entry.name);
       if (entry.isDirectory()) {
-        const found = findFile(fullPath, filename);
+        const found = findFile(full, filename);
         if (found) return found;
-      } else if (entry.name === filename) {
-        return fullPath;
-      }
+      } else if (entry.name === filename) return full;
     }
-  } catch {}
+  } catch { return null; }
   return null;
 }
 
-const clipsPath = () => {
-  const storage = process.env.STORAGE_PATH || './recordings';
-  return path.join(path.dirname(path.resolve(storage)), 'clips');
-};
-
-app.get('/health', (_req, res) => {
-  res.json({ ok: true, service: 'wardizitto-recorder', timestamp: new Date().toISOString() });
+app.get('/health', async (_req, res) => {
+  const databaseOk = await checkDatabase();
+  const status = getDatabaseStatus();
+  res.status(databaseOk ? 200 : 503).json({
+    ok: databaseOk,
+    service: 'wardizitto-recorder',
+    database: status.ready ? 'ok' : 'error',
+    timestamp: new Date().toISOString(),
+  });
 });
 
-// ─── Recordings ───────────────────────────────────────────────────────────────
+app.use('/api', requireApiAuth);
 
 app.get('/api/recordings', async (_req, res) => {
   try {
     const [rows] = await pool.query('SELECT * FROM recordings ORDER BY date DESC');
     res.json(rows);
-  } catch {
-    res.status(500).json({ error: 'Database error' });
+  } catch (error) {
+    console.error('[API] Falha ao listar gravações:', error instanceof Error ? error.message : error);
+    res.status(503).json({ error: 'Banco de dados indisponível' });
   }
 });
 
 app.get('/api/recordings/file/:filename', (req, res) => {
-  const storagePath = process.env.STORAGE_PATH || './recordings';
-  const filename = path.basename(req.params.filename);
-  const filePath = findFile(storagePath, filename);
-  if (filePath) {
-    res.download(filePath);
-  } else {
-    res.status(404).json({ error: 'File not found' });
+  const filename = req.params.filename;
+  if (filename !== path.basename(filename)) return res.status(400).json({ error: 'Nome de arquivo inválido' });
+  const filePath = findFile(getStoragePath(), filename);
+  if (!filePath || !resolveStoredFile(path.dirname(filePath), path.basename(filePath))) {
+    return res.status(404).json({ error: 'Arquivo não encontrado' });
   }
+  return res.download(filePath);
 });
 
-// ─── Clips ────────────────────────────────────────────────────────────────────
-
 app.get('/api/clips', (_req, res) => {
-  const folder = clipsPath();
+  const folder = getClipsPath();
   if (!existsSync(folder)) return res.json([]);
   try {
-    const files = readdirSync(folder)
-      .filter(f => f.endsWith('.mp3'))
-      .map(f => {
-        const filePath = path.join(folder, f);
-        const stat = statSync(filePath);
-        return { filename: f, size: stat.size, date: stat.mtime.toISOString() };
-      })
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    res.json(files);
-  } catch {
-    res.status(500).json({ error: 'Erro ao listar clips' });
+    const files = readdirSync(folder).filter(f => f.toLowerCase().endsWith('.mp3')).map(filename => {
+      const filePath = resolveStoredFile(folder, filename)!;
+      const fileStat = statSync(filePath);
+      return { filename, size: fileStat.size, date: fileStat.mtime.toISOString() };
+    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    return res.json(files);
+  } catch (error) {
+    console.error('[API] Falha ao listar clips:', error instanceof Error ? error.message : error);
+    return res.status(500).json({ error: 'Erro ao listar clips' });
   }
 });
 
 app.get('/api/clips/file/:filename', (req, res) => {
-  const filename = path.basename(req.params.filename);
-  const filePath = path.join(clipsPath(), filename);
-  if (existsSync(filePath)) {
-    res.download(filePath);
-  } else {
-    res.status(404).json({ error: 'Clip não encontrado' });
-  }
+  const filePath = resolveStoredFile(getClipsPath(), req.params.filename);
+  if (!filePath) return res.status(404).json({ error: 'Clip não encontrado' });
+  return res.download(filePath);
 });
-
-// ─── Stats ────────────────────────────────────────────────────────────────────
 
 app.get('/api/stats', async (_req, res) => {
   try {
     const [totalRecs]: any = await pool.query('SELECT COUNT(*) as count FROM recordings');
-
-    // Conta participantes únicos extraindo o JSON de participants de cada gravação
     const [allRecs]: any = await pool.query('SELECT participants FROM recordings WHERE participants IS NOT NULL');
     const uniqueUsers = new Set<string>();
     for (const row of allRecs) {
       try {
         const ids = JSON.parse(row.participants);
         if (Array.isArray(ids)) ids.forEach((id: string) => uniqueUsers.add(id));
-      } catch {}
+      } catch { /* dado legado inválido não deve derrubar as estatísticas */ }
     }
-
-    const storagePath = process.env.STORAGE_PATH || './recordings';
-    const recBytes  = getFolderSizeBytes(storagePath);
-    const clipBytes = getFolderSizeBytes(clipsPath());
-
-    res.json({
-      totalRecordings: totalRecs[0].count,
+    const storageUsedBytes = getFolderSizeBytes(getStoragePath()) + getFolderSizeBytes(getClipsPath());
+    const { maxStorageBytes, maxStorageGb, autoDeleteDays } = getStorageConfig();
+    return res.json({
+      totalRecordings: Number(totalRecs[0].count),
       totalUsers: uniqueUsers.size,
-      storageUsed: formatBytes(recBytes + clipBytes),
+      storageUsed: formatBytes(storageUsedBytes),
+      storageUsedBytes,
+      storageQuotaBytes: maxStorageBytes,
+      storageQuotaGb: maxStorageGb,
+      autoDeleteDays,
     });
-  } catch {
-    res.status(500).json({ error: 'Database error' });
+  } catch (error) {
+    console.error('[API] Falha nas estatísticas:', error instanceof Error ? error.message : error);
+    return res.status(503).json({ error: 'Banco de dados indisponível' });
   }
 });
 
-// ─── WebSocket ────────────────────────────────────────────────────────────────
-
 io.on('connection', socket => {
-  console.log('[ws] client conectado');
-  socket.on('disconnect', () => console.log('[ws] client desconectado'));
+  console.log('[ws] cliente conectado');
+  socket.on('disconnect', () => console.log('[ws] cliente desconectado'));
 });
 
-// ─── Start ────────────────────────────────────────────────────────────────────
-
 const PORT = process.env.PORT || '2312';
-
 export const startServer = () => {
-  httpServer.listen(Number(PORT), '0.0.0.0', () =>
-    console.log(`🌐 Server na porta ${PORT}`)
-  );
+  if (!dashboardUrl) console.warn('[API] DASHBOARD_URL não definida; CORS permanecerá fechado.');
+  httpServer.listen(Number(PORT), '0.0.0.0', () => console.log(`🌐 Server na porta ${PORT}`));
 };
